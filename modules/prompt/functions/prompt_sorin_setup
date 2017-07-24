@@ -77,9 +77,41 @@ function prompt_sorin_precmd_async {
   kill -WINCH $$
 }
 
+# Record when we started the command
+function prompt_sorin_preexec {
+  cmd_start_time=$SECONDS
+}
+
+# Print the first argument as human readable time duration
+function display_elapsed_time () {
+  if [[ $1 -ge 3600 ]]; then
+    let "timer_hours = $1 / 3600"
+    let "remainder = $1 % 3600"
+    let "timer_minutes = $remainder / 60"
+    let "timer_seconds = $remainder % 60"
+    print -P "%B%F{red}>>> elapsed time ${timer_hours}h${timer_minutes}m${timer_seconds}s%b"
+  elif [[ $1 -ge 60 ]]; then
+    let "timer_minutes = $1 / 60"
+    let "timer_seconds = $1 % 60"
+    print -P "%B%F{yellow}>>> elapsed time ${timer_minutes}m${timer_seconds}s%b"
+  else
+    print -P "%B%F{green}>>> elapsed time $1s%b"
+  fi
+}
+
 function prompt_sorin_precmd {
   setopt LOCAL_OPTIONS
   unsetopt XTRACE KSH_ARRAYS
+
+  # cmd_start_time is only set if the preexec handler was run right before a
+  # cmd is executed. In that case, display the elapsed time if appropriate.
+	if [[ ${cmd_start_time+x} ]]; then
+		cmd_elapsed_time=$(($SECONDS-$cmd_start_time))
+  	if [[ $cmd_elapsed_time -gt 10 ]]; then
+    	display_elapsed_time $cmd_elapsed_time
+  	fi
+  fi
+  unset cmd_start_time
 
   # Format PWD.
   _prompt_sorin_pwd=$(prompt-pwd)
@@ -96,6 +128,7 @@ function prompt_sorin_precmd {
   trap prompt_sorin_git_info WINCH
   prompt_sorin_precmd_async &!
   _prompt_sorin_precmd_async_pid=$!
+
 }
 
 function prompt_sorin_setup {
@@ -110,6 +143,7 @@ function prompt_sorin_setup {
 
   # Add hook for calling git-info before each command.
   add-zsh-hook precmd prompt_sorin_precmd
+  add-zsh-hook preexec prompt_sorin_preexec
 
   # Set editor-info parameters.
   zstyle ':prezto:module:editor:info:completing' format '%B%F{7}...%f%b'
